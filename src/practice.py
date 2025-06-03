@@ -53,3 +53,20 @@ def NumArray2D_H(start, end, step, width, endpoint = True):
             line.append(col[i])
         array.append(line)
     return array
+
+def NumArray2D_VLin(start, end, num, height, endpoint = True):
+    line = NumArray1D_Lin(start, end, num, endpoint)
+    array = []
+    for i in range(height):
+        array.append(line)
+    return array
+
+def NumArray2D_HLin(start, end, num, width, endpoint = True):
+    col = NumArray1D_Lin(start, end, num, endpoint)
+    array = []
+    for i in range(len(col)):
+        line = []
+        for j in range(width):
+            line.append(col[i])
+        array.append(line)
+    return array
