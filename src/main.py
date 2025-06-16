@@ -3,23 +3,66 @@ from PIL import Image, ImageTk
 import numpy as np
 
 class Window:
-    def __init__(self, width, height):
+    def __init__(self, width, height, start = 0, stop = 100):
         self.__root = Tk()
         self.__root.title = "Gradient Generator"
-        self.__root.geometry(f"{width}x{height+50}")
-        self.__test_button = Button(self.__root, text="TEST", command=self.test)
-        self.__test_button.place(x=10, y=height+5, width = 50, height = 40)
 
-    def display_image(self, image):
-        self.__image = ImageTk.PhotoImage(image)
-        self.__image_label = Label(self.__root, image=self.__image)
-        self.__image_label.pack(side="top")
+        self._width = int(width)
+        self._height = int(height)
+        self._start = self._percentage_to_8bit(start)
+        self._stop = self._percentage_to_8bit(stop) - 1
+
+        self.__root.geometry(f"{self._width}x{self._height+50}")
+        self._im = GradientImage(self._width, self._height, self._start, self._stop, self.__root)
+        self._im.generate_image()
+        self._create_buttons()
 
     def run(self):
         self.__root.mainloop()
 
     def test(self):
         print("Test button pressed")
+        print(self._width)
+        print(self._height)
+        print(self._start)
+        print(self._stop)
+
+    def _create_buttons(self):
+        self.__roll_left_button = Button(self.__root, text="Flip", command=self._flip_gradient)
+        self.__roll_right_button = Button(self.__root, text="TEST", command=self.test)
+        self.__roll_left_button.place(x=10, y=self._height+5, width = 80, height = 40)
+        self.__roll_right_button.place(x=self._width - 90, y=self._height+5, width = 80, height = 40)
+
+    def _flip_gradient(self):
+        self._im.flip_gradient()
+
+    def _percentage_to_8bit(self, input):
+        return (float(input) / 100.) * pow(2, 8)
+
+class GradientImage:
+    def __init__(self, width, height, start, stop, win_root = None):
+        self.line = np.linspace(start, stop, width, True, False, np.uint8)
+        self.win_root = win_root
+        self._height = height
+        self.image_label = None
+
+    def generate_image(self):
+        self._image_array = np.tile(self.line, (self._height, 1))
+        self._image = Image.fromarray(self._image_array, "L")
+        self._image.save("/home/filip/workspace/boot.dev/sound_gradient_generator/content/gradient_image.png")
+        self._display_image(self._image)
+
+    def _display_image(self, image):
+        if self.image_label:
+            self.image_label.pack_forget()
+        self._image_tk = ImageTk.PhotoImage(image)
+        self.image_label = Label(self.win_root, image=self._image_tk)
+        self.image_label.pack()
+    
+    def flip_gradient(self):
+        self.line = self.line[::-1]
+        self.generate_image()
+        
 
 def test_image():
     line = np.linspace(0, 255, 100, True, False, np.uint8)
@@ -29,26 +72,9 @@ def test_image():
     image.save("/home/filip/workspace/boot.dev/sound_gradient_generator/content/image.png", quality=100, subsampling=0)
 
 def generate_test_image(*args):
-    if len(args) != 5:
-        raise ValueError("Five parameters required")
-    width = int(args[0])
-    height = int(args[1])
-    start = (float(args[2]) / 100.) * pow(2, 8)
-    stop = (float(args[3]) / 100.) * pow(2, 8) - 1
-    
-    line = None
-    if args[4] == '2':
-        line = two_point_gradient(start, stop, width)
-    elif args[4] == '3':
-        line = three_point_gradient(start, stop, width)
-    else:
-        raise Exception("Not supported")
-    
-    array = np.tile(line, (height, 1))
-    image = Image.fromarray(array, "L")
-    image.save("/home/filip/workspace/boot.dev/sound_gradient_generator/content/test_image.png")
-    win = Window(width, height)
-    win.display_image(image)
+    if len(args) < 2:
+        raise ValueError("Minimum arguments required: Width, Height")
+    win = Window(args[0], args[1], args[2], args[3])
     win.run()
 
 def two_point_gradient(start, stop, width):
