@@ -15,7 +15,11 @@ class Window:
         self.__root.geometry(f"{self._width}x{self._height+50}")
         self._im = GradientImage(self._width, self._height, self._start, self._stop, self.__root)
         self._im.generate_image()
-        self._create_buttons()
+        self._v1 = DoubleVar()
+        #self.canvas = Canvas(self.__root, width = width, height = 45)
+        #self.canvas.place(x=0, y=self._height+5)
+        self._create_buttons_testing()
+        #self._create_slider_testing()
 
     def run(self):
         self.__root.mainloop()
@@ -27,14 +31,28 @@ class Window:
         print(self._start)
         print(self._stop)
 
-    def _create_buttons(self):
-        self.__roll_left_button = Button(self.__root, text="Flip", command=self._flip_gradient)
-        self.__roll_right_button = Button(self.__root, text="TEST", command=self.test)
-        self.__roll_left_button.place(x=10, y=self._height+5, width = 80, height = 40)
-        self.__roll_right_button.place(x=self._width - 90, y=self._height+5, width = 80, height = 40)
+    def _display_data(self):
+        print(self._im.line)
 
-    def _flip_gradient(self):
-        self._im.flip_gradient()
+    def _create_buttons(self):
+        self.__roll_left_button = Button(self.__root, text="Move Left", command=self._im.roll_left, repeatinterval=10, repeatdelay=250)
+        self.__flip_button = Button(self.__root, text="Flip", command=self._im.flip_gradient)
+        self.__roll_right_button = Button(self.__root, text="Move Right", command=self._im.roll_right, repeatinterval=10, repeatdelay=250)
+        self.__roll_left_button.place(x=10, y=self._height+5, width=80, height=40)
+        self.__flip_button.place(x=self._width / 2 - 40, y= self._height+5, width=80, height=40)
+        self.__roll_right_button.place(x=self._width - 90, y=self._height+5, width=80, height=40)
+
+    def _create_buttons_testing(self):
+        self.__roll_left_button = Button(self.__root, text="", command=self._im.roll_left, repeatinterval=10, repeatdelay=250)
+        self.__flip_button = Button(self.__root, text="", command=self._display_data)
+        self.__roll_right_button = Button(self.__root, text="", command=self._im.roll_right, repeatinterval=10, repeatdelay=250)
+        self.__roll_left_button.place(x=10, y=self._height+5, width=10, height=40)
+        self.__flip_button.place(x=self._width / 2 - 5, y= self._height+5, width=10, height=40)
+        self.__roll_right_button.place(x=self._width - 20, y=self._height+5, width=10, height=40)
+
+    def _create_slider_testing(self):
+        self.__test_slider = Scale(self.__root, variable=self._v1, from_=0, to=1, orient = HORIZONTAL, digits=3, resolution=0.01, sliderlength=10, showvalue=0)
+        self.__test_slider.place(x=0, y=self._height+5, width=self._width, height=40)
 
     def _percentage_to_8bit(self, input):
         return (float(input) / 100.) * pow(2, 8)
@@ -44,25 +62,51 @@ class GradientImage:
         self.line = np.linspace(start, stop, width, True, False, np.uint8)
         self.win_root = win_root
         self._height = height
+        self._width = width
         self.image_label = None
+        self._roll_line = self.line[::-1]
 
     def generate_image(self):
         self._image_array = np.tile(self.line, (self._height, 1))
         self._image = Image.fromarray(self._image_array, "L")
         self._image.save("/home/filip/workspace/boot.dev/sound_gradient_generator/content/gradient_image.png")
-        self._display_image(self._image)
+        self._image_tk = ImageTk.PhotoImage(self._image)
+        if not self.image_label:
+            self._display_image(self._image_tk)
+        else:
+            self._update_image(self._image_tk)
 
     def _display_image(self, image):
         if self.image_label:
             self.image_label.pack_forget()
-        self._image_tk = ImageTk.PhotoImage(image)
-        self.image_label = Label(self.win_root, image=self._image_tk)
+        self.image_label = Label(self.win_root, image=image)
         self.image_label.pack()
+
+    def _update_image(self, image):
+        self.image_label.config(image=image)
     
     def flip_gradient(self):
+        self._roll_line = self._roll_line[::-1]
         self.line = self.line[::-1]
         self.generate_image()
-        
+
+    def roll_left(self):
+        self._increment = int(self._width / 10)
+        self._chunk = self._roll_line[:self._increment]
+        self._roll_line = self._roll_line[self._increment:]
+        self.line = np.append(self.line, self._chunk)
+        self._roll_line = np.append(self._roll_line, self.line[:self._increment])
+        self.line = self.line[self._increment:]
+        self.generate_image()
+
+    def roll_right(self):
+        self._increment = int(self._width / 10)
+        self._chunk = self._roll_line[-self._increment:]
+        self._roll_line = self._roll_line[:-self._increment]
+        self.line = np.append(self._chunk, self.line)
+        self._roll_line = np.append(self.line[-self._increment:], self._roll_line)
+        self.line = self.line[:-self._increment]
+        self.generate_image()
 
 def test_image():
     line = np.linspace(0, 255, 100, True, False, np.uint8)
