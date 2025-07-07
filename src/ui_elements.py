@@ -12,17 +12,23 @@ class Window:
         self._start = self._percentage_to_8bit(start)
         self._stop = self._percentage_to_8bit(stop) - 1
 
-        self.__root.geometry(f"{self._width}x{self._height+50}")
+        self._ui_area = 100
+
+        self.__root.geometry(f"{self._width}x{self._height+self._ui_area}")
         self._im = GradientImage(self._width, self._height, self._start, self._stop, self.__root)
         self._im.generate_image()
 
         self._v1 = DoubleVar()
         
-        self.canvas = Canvas(self.__root, width = self._width, height = 50)
+        self.canvas = Canvas(self.__root, width = self._width, height = self._ui_area)
         self.canvas.place(x=0, y=self._height)
-        self._slider = Slider(x=5, y=5, thickness=40, length=self._width-10, orientation=HORIZONTAL, canvas=self.canvas)
+        #self.canvas.bind("<Button-1>", self._mouse_location)
+        self._slider = Slider(x=10, y=5, thickness=40, length=self._width-20, orientation=HORIZONTAL, canvas=self.canvas)
         #self._create_buttons_testing()
         #self._create_slider_testing()
+
+    def _mouse_location(self, event):
+        print(event.x, event.y)
 
     def run(self):
         self.__root.mainloop()
@@ -114,16 +120,16 @@ class Slider:
         self._thickness = self.__dict__.get('thickness', 10)
         self._orientation = self.__dict__.get('orientation', VERTICAL)
         self._canvas = self.__dict__.get('canvas', None)
-        self._create_frame()
 
-        self._cursor_width = self.__dict__.get('cursor_width', 10)
-        self._cursor = None
+        self._cursor_width = self.__dict__.get('cursor_width', 18)
+        self._line_width = 3
+        
+        self._create_frame()
         self._create_cursor()
 
     def _create_frame(self):
         if not self._canvas:
             return
-        self._line_width = 2
         if self._orientation == VERTICAL:
             self._canvas.create_rectangle(self._x, self._y, self._x+self._thickness, self._y+self._length, outline="black", width=self._line_width)
         elif self._orientation == HORIZONTAL:
@@ -133,61 +139,80 @@ class Slider:
         if not self._canvas:
             return   
         if self._orientation == VERTICAL:
-            self._cursor = Cursor(self._x, 
-                                  self._y, 
-                                  self._x+self._thickness, 
-                                  self._y+self._cursor_width, 
-                                  self._canvas, 
-                                  self._cursor_width,
-                                  self._y,
-                                  self._y+self._length)
+            pass
         elif self._orientation == HORIZONTAL:
-            self._cursor = Cursor(self._x, 
-                                  self._y, 
-                                  self._x+self._cursor_width, 
-                                  self._y+self._thickness, 
-                                  self._canvas,
-                                  self._cursor_width,
+            self._cursor = Cursor(self._canvas, 
                                   self._x,
-                                  self._x+self._length)
-            self._canvas.tag_bind(self._cursor.get_object(), '<Button-1>', self._cursor.calculate_offset)
-            self._canvas.tag_bind(self._cursor.get_object(), '<B1-Motion>', self._cursor.move_x)
-            self._canvas.tag_bind(self._cursor.get_object(), '<B1-ButtonRelease>', self._cursor.unclick)
-        self._canvas.tag_bind(self._cursor.get_object(), '<Enter>', self._cursor.highlight_on)
-        self._canvas.tag_bind(self._cursor.get_object(), '<Leave>', self._cursor.highlight_off)
+                                  self._y, 
+                                  self._thickness, 
+                                  self._line_width, 
+                                  self._cursor_width,
+                                  self._length)
 
 class Cursor:
-    def __init__(self, x1, y1, x2, y2, canvas, cursor_width, boundary_min, boundary_max):
-        self.__root = canvas.create_rectangle(x1, y1, x2, y2, fill="grey")
+    def __init__(self, canvas, x1, y1, thickness, line_width, cursor_width, length):
         self._canvas = canvas
+        self._thickness = thickness
+        self._line_width = line_width
         self._cursor_width = cursor_width
+        self._cursor_clickable = None
+        self._boundary_min = x1+line_width
+        self._boundary_max = x1+length-line_width
+        self._create_cursor_elements()
+        self._update_cursor_coords(x1+line_width,y1+line_width/2)
+
         self._cursor_position = 0
-        self._boundary_min = boundary_min
-        self._boundary_max = boundary_max
-        self._offset_x = 0
         self._clicked = False
+
+    def _create_cursor_elements(self):
+        self._line = self._canvas.create_line(0, 0, 0, 0, fill="red", width=self._line_width, dash=(8,2), tags="cursor")
+        self._triangle = self._canvas.create_polygon((0,0),(0,0),(0,0), fill="#666666", tags="cursor")
+        self._square = self._canvas.create_rectangle((0,0),(0,0), fill="black", tags="cursor")
+        self._canvas.tag_bind("cursor", '<Button-1>', self.highlight_on)
+        self._canvas.tag_bind("cursor", '<B1-Motion>', self.move_x)
+        self._canvas.tag_bind("cursor", '<B1-ButtonRelease>', self.highlight_off)
+
+    def _update_cursor_coords(self, x1, y1):
+        self._canvas.coords(self._line,
+                            (x1,y1),
+                            (x1,y1+self._thickness-self._line_width))
+        _line_bottom_x = self._canvas.coords(self._line)[2]
+        _line_bottom_y = self._canvas.coords(self._line)[3]
+
+        self._canvas.coords(self._triangle,
+                            (_line_bottom_x, _line_bottom_y),
+                            (_line_bottom_x+(self._cursor_width/2), _line_bottom_y+self._cursor_width),
+                            (_line_bottom_x-(self._cursor_width/2), _line_bottom_y+self._cursor_width))
+        
+        _square_x1 = self._canvas.coords(self._triangle)[4]
+        _square_y1 = self._canvas.coords(self._triangle)[3]
+        _square_x2 = self._canvas.coords(self._triangle)[2]
+        _square_y2 = self._canvas.coords(self._triangle)[3]+self._cursor_width
+        self._canvas.coords(self._square,
+                            (_square_x1,_square_y1),
+                            (_square_x2,_square_y2))
 
     def _calculate_cursor_position(self, value):
         self._cursor_position = np.interp(value, [self._boundary_min, self._boundary_max-self._cursor_width], [0,1])
-        print(self._cursor_position)
-
-    def unclick(self, event):
-        self._clicked = False
 
     def highlight_on(self, event):
-        self._canvas.itemconfig(self.__root, fill="yellow")
+        print(self._canvas.coords(self._line)[1])
+        self._clicked = True
+        self._canvas.itemconfig(self._triangle, fill="#AAAAAA")
 
     def highlight_off(self, event):
-        if not self._clicked:
-            self._canvas.itemconfig(self.__root, fill="grey")
+        self._clicked = False
+        self._canvas.itemconfig(self._triangle, fill="#666666")
 
     def get_object(self):
-        return self.__root
+        return self._square
 
     def move_x(self, event):
-        self._canvas.moveto(self.__root, x=min(self._boundary_max-1 - self._cursor_width, max(self._boundary_min-1, event.x-self._offset_x)))
-        self._calculate_cursor_position(self._canvas.coords(self.__root)[0])
+        _x = min(max(self._boundary_min, event.x), self._boundary_max)
+        self._update_cursor_coords(_x, self._canvas.coords(self._line)[1])
+        print(f"Cursor Location: {self._canvas.coords(self._line)[0]} | Mouse Location: {event.x}")
 
-    def calculate_offset(self, event):
-        self._offset_x = event.x - self._canvas.coords(self.__root)[0]
+    def _calculate_offset(self, event):
+        self._cursor_offset_x = event.x - self._canvas.coords(self._line)[0]
+        print(f"Line Coordinates: {self._canvas.coords(self._line)} | Triangle Coordinates: {self._canvas.coords(self._triangle)} | Square Coordinates: {self._canvas.coords(self._square)}")
         self._clicked = True
