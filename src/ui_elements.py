@@ -14,7 +14,10 @@ class Window:
 
         self._ui_area = 250
 
-        self.__root.geometry(f"{self._width}x{self._height+self._ui_area}")
+        #self.__root.geometry(f"{self._width}x{self._height+self._ui_area}")
+        self.__root.minsize(self._width, self._height+self._ui_area)
+        self.__root.maxsize(self._width, self._height+self._ui_area)
+        self.__root.resizable(width=False, height=False)
         self._im = GradientImage(self._width, self._height, self._start, self._stop, self.__root)
         self._im.generate_image()
 
@@ -180,6 +183,7 @@ class Slider:
             self._height,
             self._line_width,
             self._cursor_width,
+            0,
             0
         )
         self._cursor_right = GradientCursor(
@@ -190,7 +194,8 @@ class Slider:
             self._height,
             self._line_width,
             self._cursor_width,
-            1
+            1,
+            255
         )
         self._cursors.append(self._cursor_left)
         self._cursors.append(self._cursor_right)
@@ -211,9 +216,10 @@ class Slider:
     def recalculate_gradient_test(self):
         if len(self._cursors) < 2:
             return
-        _distance = round(self._cursors[1].cursor_position, 4) - round(self._cursors[0].cursor_position, 4)
-        _distance = len(self._win.get_gradient())*_distance
-        _new_gradient = np.linspace(self._win.get_endpoint_colors()[0], self._win.get_endpoint_colors()[1], abs(round(_distance)), True, False, np.uint8)
+        self._sort_cursors()
+        _distance = self._cursors[1].cursor_position - self._cursors[0].cursor_position
+        _distance = round(len(self._win.get_gradient())*_distance)
+        _new_gradient = np.linspace(self._cursors[0].shade, self._cursors[1].shade, abs(round(_distance)), True, False, np.uint8)
         _left_padding = []
         _right_padding = []
         _left_padding_size = len(self._win.get_gradient())*self._cursors[0].cursor_position
@@ -226,14 +232,20 @@ class Slider:
         #print(f"Full Size --> Float:{_left_padding_size+len(_new_gradient)+_right_padding_size} Int:{int(_left_padding_size+len(_new_gradient)+_right_padding_size)} Rounded:{round(_left_padding_size+len(_new_gradient)+_right_padding_size)}\n")
 
         if self._cursors[0].cursor_position > 0:
-            _left_padding = np.full((1, round(_left_padding_size)), 0)
+            _left_padding = np.full((1, round(_left_padding_size)), self._cursors[0].shade)
             _left_padding = _left_padding[0]
         if self._cursors[1].cursor_position < 1:
-            _right_padding = np.full((1, round(_right_padding_size)), 255)
+            _right_padding = np.full((1, round(_right_padding_size)), self._cursors[1].shade)
             _right_padding = _right_padding[0]
         _new_gradient = np.concatenate((_left_padding, _new_gradient, _right_padding))
         _new_gradient = _new_gradient.astype(np.uint8)
         self._win.set_gradient(_new_gradient)
+
+    def _sort_cursors(self): # Sorts cursors based on their position along the slider
+        self._cursors = sorted(self._cursors, key=lambda cursor: cursor.cursor_position)
+
+    def cursor_status(self):
+        print(self._cursors)
 
     def response_test(self):
         print("Hello!")
@@ -243,10 +255,12 @@ class Cursor: # TODO: Implement parent cursor class, make GradientCursor its chi
         self._canvas = canvas
 
 class GradientCursor:
-    def __init__(self, slider, canvas, x1, y1, height, line_width, cursor_width, id = 0):
+    def __init__(self, slider, canvas, x1, y1, height, line_width, cursor_width, id = 0, shade = 0):
         self._slider = slider
         self._canvas = canvas
         self._id = id
+        self._tag = "Cursor" + str(self._id)
+        self.shade = shade
 
         self._height = height
         self._line_width = line_width
@@ -260,16 +274,16 @@ class GradientCursor:
 
         self.cursor_position = 0
         self._clicked = False
-        print(f"created with id: {"cursor"+str(self._id)}")
+    def __repr__(self):
+        return f"{self._tag} at position {self.cursor_position} with shade {self.shade}"
 
     def _create_cursor_elements(self):
-        _tag = "cursor" + str(self._id)
-        self._line = self._canvas.create_line(0, 0, 0, 0, fill="red", width=self._line_width, dash=(8,2), tags=_tag)
-        self._triangle = self._canvas.create_polygon((0,0),(0,0),(0,0), fill="#666666", tags=_tag)
-        self._square = self._canvas.create_rectangle((0,0),(0,0), fill="black", tags=_tag)
-        self._canvas.tag_bind(_tag, '<Button-1>', self.highlight_on)
-        self._canvas.tag_bind(_tag, '<B1-Motion>', self.move_x)
-        self._canvas.tag_bind(_tag, '<B1-ButtonRelease>', self.highlight_off)
+        self._line = self._canvas.create_line(0, 0, 0, 0, fill="red", width=self._line_width, dash=(8,2), tags=self._tag)
+        self._triangle = self._canvas.create_polygon((0,0),(0,0),(0,0), fill="#666666", tags=self._tag)
+        self._square = self._canvas.create_rectangle((0,0),(0,0), fill="black", tags=self._tag)
+        self._canvas.tag_bind(self._tag, '<Button-1>', self.highlight_on)
+        self._canvas.tag_bind(self._tag, '<B1-Motion>', self.move_x)
+        self._canvas.tag_bind(self._tag, '<B1-ButtonRelease>', self.highlight_off)
 
     def _update_cursor_coords(self, x1, y1):
         self._canvas.coords(self._line,
@@ -299,10 +313,12 @@ class GradientCursor:
         self._clicked = True
         self._canvas.itemconfig(self._triangle, fill="#AAAAAA")
         self._calculate_cursor_position(self._canvas.coords(self._line)[0])
+        self._slider.cursor_status()
 
     def highlight_off(self, event):
         self._clicked = False
         self._canvas.itemconfig(self._triangle, fill="#666666")
+        self._slider.cursor_status()
 
     def move_x(self, event):
         _x = min(max(self._boundary_min, event.x), self._boundary_max)
